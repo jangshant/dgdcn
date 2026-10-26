@@ -1,37 +1,59 @@
-FROM ubuntu:16.04
-MAINTAINER Jangshant Singh <mail@jangshant.com>
+# syntax=docker/dockerfile:1
 
-ENV DEBIAN_FRONTEND noninteractive
-## Install php nginx mysql supervisor drush git
-RUN apt update
-RUN    apt install -y php-fpm php-cli php-gd php-mcrypt php-mysql php-curl && \
-				nginx \
-				curl \
-				supervisor \
-				mysql-server \
-				libpng12-dev libjpeg-dev libpq-dev \
-				drush \
-				git 
-RUN	echo "mysql-server mysql-server/root_password password" | debconf-set-selections && \
-    echo "mysql-server mysql-server/root_password_again password" | debconf-set-selections && \
-    rm -rf /var/lib/apt/lists/*
-    ## Configuration
-RUN sed -i 's/^listen\s*=.*$/listen = 127.0.0.1:9000/' /etc/php/7.0/fpm/pool.d/www.conf && \
-    sed -i 's/^\;error_log\s*=\s*syslog\s*$/error_log = \/var\/log\/php\/cgi.log/' /etc/php/7.0/fpm/php.ini && \
-    sed -i 's/^\;error_log\s*=\s*syslog\s*$/error_log = \/var\/log\/php\/cli.log/' /etc/php/7.0/cli/php.ini && \
-    sed -i 's/^key_buffer\s*=/key_buffer_size =/' /etc/mysql/my.cnf
+# ---------------------------------------------------------------------------
+# app: PHP-FPM with Drupal 11, CiviCRM, Drush, cv and Git.
+# ---------------------------------------------------------------------------
+FROM ubuntu:24.04 AS app
 
-COPY files/root /
+ENV DEBIAN_FRONTEND=noninteractive
 
-WORKDIR /var/www/
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl git mariadb-client patch unzip \
+      php8.3-fpm php8.3-cli php8.3-bcmath php8.3-curl php8.3-gd php8.3-intl \
+      php8.3-mbstring php8.3-mysql php8.3-opcache php8.3-soap php8.3-xml php8.3-zip \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /run/php \
+ && git config --system --add safe.directory /var/www/html
 
-VOLUME /var/www/
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
-EXPOSE 80
-RUN 	chown -R www-data:www-data /var/www /var/log/php
-RUN	if [ ! -d /var/lib/mysql/mysql ];then mysqld --initialize-insecure --user=root --datadir=/var/lib/mysql; fi
-RUN	chown -R mysql:mysql /var/lib/mysql && \
-RUN	exec /usr/bin/supervisord --nodaemon -c /etc/supervisor/supervisord.conf
-	
-#ENTRYPOINT ["/entrypoint.sh"]
-  
+# cv: the CiviCRM command line tool (used to install CiviCRM).
+ARG CV_URL=https://download.civicrm.org/cv/cv.phar
+RUN curl -fsSL "$CV_URL" -o /usr/local/bin/cv && chmod 755 /usr/local/bin/cv
+
+COPY docker/php/php.ini  /etc/php/8.3/fpm/conf.d/90-dgdcn.ini
+COPY docker/php/php.ini  /etc/php/8.3/cli/conf.d/90-dgdcn.ini
+COPY docker/php/www.conf /etc/php/8.3/fpm/pool.d/www.conf
+RUN sed -i 's#^error_log = .*#error_log = /proc/self/fd/2#' /etc/php/8.3/fpm/php-fpm.conf
+
+# Everything under /var/www belongs to www-data, the user Drush, Git and
+# Composer are meant to run as (its home directory is /var/www).
+RUN mkdir -p /var/www/html /var/www/private \
+ && chown -R www-data:www-data /var/www
+WORKDIR /var/www/html
+USER www-data
+
+COPY --chown=www-data:www-data composer.json composer.lock ./
+COPY --chown=www-data:www-data patches/ patches/
+RUN composer install --no-dev --no-interaction --no-progress --optimize-autoloader \
+ && composer clear-cache \
+ && mkdir -p web/sites/default/files web/extensions
+
+COPY --chown=www-data:www-data docker/drupal/settings.php docker/drupal/civicrm.settings.php web/sites/default/
+
+USER root
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+ENV PATH=/var/www/html/vendor/bin:$PATH
+
+EXPOSE 9000
+ENTRYPOINT ["entrypoint.sh"]
+CMD ["php-fpm8.3", "--nodaemonize"]
+
+# ---------------------------------------------------------------------------
+# web: Nginx serving the static files of the same build.
+# ---------------------------------------------------------------------------
+FROM nginx:1.28-alpine AS web
+
+COPY --from=app /var/www/html/web /var/www/html/web
+COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf

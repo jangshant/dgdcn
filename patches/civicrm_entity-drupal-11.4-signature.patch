@@ -1,0 +1,18 @@
+diff --git a/src/CiviEntityStorage.php b/src/CiviEntityStorage.php
+index b1402db..16833a0 100644
+--- a/src/CiviEntityStorage.php
++++ b/src/CiviEntityStorage.php
+@@ -549,10 +549,12 @@ class CiviEntityStorage extends SqlContentEntityStorage {
+    *   defaults to FALSE.
+    * @param bool $load_from_revision
+    *   Boolean to load from revision.
++   * @param array|null &$translations
++   *   Unused; matches the parent signature since Drupal 11.4.
+    *
+    * @throws \Drupal\Core\Entity\Sql\SqlContentEntityStorageException
+    */
+-  protected function loadFromDedicatedTables(array &$values, $load_from_revision = FALSE) {
++  protected function loadFromDedicatedTables(array &$values, $load_from_revision = FALSE, &$translations = NULL) {
+     if (empty($values)) {
+       return;
+     }

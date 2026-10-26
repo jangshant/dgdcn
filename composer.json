@@ -1,0 +1,77 @@
+{
+    "name": "jangshant/dgdcn",
+    "description": "Drush, Git, Drupal, CiviCRM and Nginx in Docker.",
+    "type": "project",
+    "license": "GPL-2.0-or-later",
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/jackrabbithanna/civicrm_entity",
+            "no-api": true
+        }
+    ],
+    "require": {
+        "php": ">=8.3",
+        "civicrm/civicrm-asset-plugin": "^1.2",
+        "civicrm/civicrm-core": "~6.19.0",
+        "civicrm/civicrm-drupal-8": "~6.19.0",
+        "civicrm/civicrm-packages": "~6.19.0",
+        "composer/installers": "^2.3",
+        "drupal/civicrm_entity": "4.0.x-dev",
+        "drupal/core-composer-scaffold": "^11.2",
+        "drupal/core-recommended": "^11.2",
+        "drush/drush": "^13.8"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.6"
+        },
+        "allow-plugins": {
+            "civicrm/civicrm-asset-plugin": true,
+            "civicrm/composer-compile-plugin": true,
+            "civicrm/composer-downloads-plugin": true,
+            "composer/installers": true,
+            "cweagans/composer-patches": true,
+            "drupal/core-composer-scaffold": true,
+            "php-http/discovery": true,
+            "symfony/runtime": true
+        }
+    },
+    "extra": {
+        "compile-mode": "all",
+        "enable-patching": true,
+        "patches": {
+            "drupal/civicrm_entity": {
+                "Drupal 11.4 compatible loadFromDedicatedTables() signature": "patches/civicrm_entity-drupal-11.4-signature.patch"
+            }
+        },
+        "drupal-scaffold": {
+            "locations": {
+                "web-root": "web/"
+            }
+        },
+        "installer-paths": {
+            "web/core": [
+                "type:drupal-core"
+            ],
+            "web/libraries/{$name}": [
+                "type:drupal-library"
+            ],
+            "web/modules/contrib/{$name}": [
+                "type:drupal-module"
+            ],
+            "web/profiles/contrib/{$name}": [
+                "type:drupal-profile"
+            ],
+            "web/themes/contrib/{$name}": [
+                "type:drupal-theme"
+            ],
+            "drush/Commands/contrib/{$name}": [
+                "type:drupal-drush"
+            ]
+        }
+    }
+}

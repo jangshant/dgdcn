@@ -1,0 +1,73 @@
+name: dgdcn
+
+x-app-env: &app-env
+  BASE_URL: ${BASE_URL:-http://localhost:8080}
+  DRUSH_OPTIONS_URI: ${BASE_URL:-http://localhost:8080}
+  SITE_NAME: ${SITE_NAME:-dgdcn}
+  AUTO_INSTALL: ${AUTO_INSTALL:-1}
+  DB_HOST: db
+  DRUPAL_DB_NAME: drupal
+  DRUPAL_DB_USER: drupal
+  DRUPAL_DB_PASSWORD: ${DRUPAL_DB_PASSWORD:?set it in .env}
+  CIVICRM_DB_NAME: civicrm
+  CIVICRM_DB_USER: civicrm
+  CIVICRM_DB_PASSWORD: ${CIVICRM_DB_PASSWORD:?set it in .env}
+  DRUPAL_HASH_SALT: ${DRUPAL_HASH_SALT:?set it in .env}
+  DRUPAL_TRUSTED_HOSTS: ${DRUPAL_TRUSTED_HOSTS:-^localhost$}
+  DRUPAL_ADMIN_USER: ${DRUPAL_ADMIN_USER:-admin}
+  DRUPAL_ADMIN_PASSWORD: ${DRUPAL_ADMIN_PASSWORD:?set it in .env}
+
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set it in .env}
+      MARIADB_DATABASE: drupal
+      MARIADB_USER: drupal
+      MARIADB_PASSWORD: ${DRUPAL_DB_PASSWORD}
+      CIVICRM_DB_NAME: civicrm
+      CIVICRM_DB_USER: civicrm
+      CIVICRM_DB_PASSWORD: ${CIVICRM_DB_PASSWORD}
+    volumes:
+      - db:/var/lib/mysql
+      - ./docker/mariadb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      target: app
+    image: dgdcn-app
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - files:/var/www/html/web/sites/default/files
+      - extensions:/var/www/html/web/extensions
+      - private:/var/www/private
+
+  web:
+    build:
+      context: .
+      target: web
+    image: dgdcn-web
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - files:/var/www/html/web/sites/default/files:ro
+      - extensions:/var/www/html/web/extensions:ro
+
+volumes:
+  db:
+  files:
+  extensions:
+  private:
